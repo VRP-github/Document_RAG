@@ -7,14 +7,15 @@ on:
 jobs:
   evaluate:
     runs-on: self-hosted
+    env:
+      RUNNER_TOOL_CACHE: /tmp/hostedtoolcache
+      AGENT_TOOLSDIRECTORY: /tmp/hostedtoolcache
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
     - name: Prepare tool cache directory
       run: |
-        echo "RUNNER_TOOL_CACHE=/tmp/hostedtoolcache" >> "$GITHUB_ENV"
-        echo "AGENT_TOOLSDIRECTORY=/tmp/hostedtoolcache" >> "$GITHUB_ENV"
         mkdir -p /tmp/hostedtoolcache
 
     - name: Debug tool cache path
