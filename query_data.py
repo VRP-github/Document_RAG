@@ -87,7 +87,7 @@ def query_rag(query_text: str):
 
     if os.getenv("GITHUB_ACTIONS") == "true":
         model = ChatGoogleGenerativeAI(
-            model="gemini-1.5-flash-latest",
+            model="gemini-2.0-flash",
             temperature=0,
             api_key=os.getenv("GEMINI_API_KEY")
         )
