@@ -8,14 +8,16 @@ jobs:
   evaluate:
     runs-on: self-hosted
 
-    # --- THE FIX ---
     env:
-      # Redirects the Python installation to your Mac's safe temporary folder
-      RUNNER_TOOL_CACHE: /tmp/hostedtoolcache
-    # ---------------
+      RUNNER_TOOL_CACHE: ${{ github.workspace }}/.toolcache
+      AGENT_TOOLSDIRECTORY: ${{ github.workspace }}/.toolcache
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+
+    - name: Prepare tool cache directory
+      run: |
+        mkdir -p "$RUNNER_TOOL_CACHE"
 
     - name: Set up Python
       uses: actions/setup-python@v5
