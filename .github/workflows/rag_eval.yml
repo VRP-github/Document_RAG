@@ -8,6 +8,9 @@ jobs:
   evaluate:
     runs-on: self-hosted
 
+    env:
+      RUNNER_TOOL_CACHE: /tmp/hostedtoolcache
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
