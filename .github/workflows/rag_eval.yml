@@ -6,26 +6,10 @@ on:
 
 jobs:
   evaluate:
-    runs-on: self-hosted
-    defaults:
-      run:
-        shell: sh
-    env:
-      BASH_ENV: /dev/null
-      RUNNER_TOOL_CACHE: /tmp/hostedtoolcache
-      AGENT_TOOLSDIRECTORY: /tmp/hostedtoolcache
+    runs-on: ubuntu-latest
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-
-    - name: Prepare tool cache directory
-      run: |
-        mkdir -p /tmp/hostedtoolcache
-
-    - name: Debug tool cache path
-      run: |
-        echo "RUNNER_TOOL_CACHE=$RUNNER_TOOL_CACHE"
-        echo "AGENT_TOOLSDIRECTORY=$AGENT_TOOLSDIRECTORY"
 
     - name: Set up Python
       uses: actions/setup-python@v5
