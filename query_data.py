@@ -3,6 +3,7 @@ from langchain_chroma import Chroma
 from langchain_core.prompts import ChatPromptTemplate
 from dotenv import load_dotenv
 from langchain_ollama import OllamaLLM 
+from langchain_google_genai import ChatGoogleGenerativeAI # NEW: Imported Gemini
 import json
 from get_embedding_function import get_embedding_function
 import os
@@ -83,8 +84,20 @@ def query_rag(query_text: str):
     prompt = prompt_template.format(context=context_text, question=query_text, allowed_ids=allowed_sources_string)
 
     print("\n Generating Response:\n")
-    model = OllamaLLM(model="llama3.2")
-    response_text = model.invoke(prompt)
+
+    if os.getenv("GITHUB_ACTIONS") == "true":
+        model = ChatGoogleGenerativeAI(
+            model="gemini-1.5-flash",
+            temperature=0,
+            api_key=os.getenv("GEMINI_API_KEY")
+        )
+    else:
+        model = OllamaLLM(model="llama3.2")
+    
+    raw_response = model.invoke(prompt)
+    
+
+    response_text = raw_response.content if hasattr(raw_response, 'content') else raw_response
 
     is_safe, final_output = validate_citations(response_text, retrieved_docs)
 
