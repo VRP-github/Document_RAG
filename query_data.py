@@ -4,7 +4,7 @@ from langchain_chroma import Chroma
 from langchain_core.prompts import ChatPromptTemplate
 from dotenv import load_dotenv
 from langchain_ollama import OllamaLLM 
-from langchain_google_genai import ChatGoogleGenerativeAI, ChatGoogleGenerativeAIError
+from langchain_google_genai import ChatGoogleGenerativeAI
 import json
 from get_embedding_function import get_embedding_function
 import os
@@ -117,8 +117,13 @@ def query_rag(query_text: str):
     
     try:
         raw_response = _invoke_with_retries(model, prompt)
-    except ChatGoogleGenerativeAIError as exc:
-        if os.getenv("GITHUB_ACTIONS") == "true":
+    except Exception as exc:
+        error_text = str(exc)
+        is_quota_or_rate_limited = any(
+            token in error_text for token in ["429", "RESOURCE_EXHAUSTED", "rate limit"]
+        )
+
+        if os.getenv("GITHUB_ACTIONS") == "true" and is_quota_or_rate_limited:
             print(f"Gemini request failed in CI: {exc}")
             if os.getenv("ENABLE_OLLAMA_FALLBACK", "false").lower() == "true":
                 print("Falling back to Ollama because ENABLE_OLLAMA_FALLBACK=true")
@@ -131,15 +136,6 @@ def query_rag(query_text: str):
                 )
         else:
             raise
-    except Exception as exc:
-        if os.getenv("GITHUB_ACTIONS") == "true" and any(
-            token in str(exc) for token in ["429", "RESOURCE_EXHAUSTED", "rate limit"]
-        ):
-            return (
-                "LLM generation unavailable: transient provider quota/rate-limit error. "
-                "Retry later or provide a key/model with available quota."
-            )
-        raise
     
 
     response_text = raw_response.content if hasattr(raw_response, 'content') else raw_response
