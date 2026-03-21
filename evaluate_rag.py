@@ -91,7 +91,7 @@ def run_evaluations():
         print("\nQuality Gate Failed! Halting pipeline.")
         sys.exit(1) 
     else:
-        print("\nQuality Gate Passed! Safe to merge.")
+        print("\nQuality Gate Passed! Safe to merge!")
         sys.exit(0) 
 
 if __name__ == "__main__":
