@@ -1,5 +1,6 @@
 import argparse
 import time
+from functools import lru_cache
 from langchain_chroma import Chroma
 from langchain_core.prompts import ChatPromptTemplate
 from dotenv import load_dotenv
@@ -20,6 +21,16 @@ chroma_path = os.getenv("CHROMA_PATH")
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
 
+_CI_QUOTA_EXHAUSTED = False
+
+
+def _is_ci() -> bool:
+    return os.getenv("GITHUB_ACTIONS") == "true"
+
+
+def _is_quota_or_rate_limit_error(error_text: str) -> bool:
+    return any(token in error_text for token in ["429", "RESOURCE_EXHAUSTED", "rate limit"])
+
 
 def _invoke_with_retries(model, prompt: str, max_retries: int = 3, base_wait_seconds: float = 5.0):
     """Call an LLM with bounded retries for transient quota/rate-limit failures."""
@@ -28,7 +39,7 @@ def _invoke_with_retries(model, prompt: str, max_retries: int = 3, base_wait_sec
             return model.invoke(prompt)
         except Exception as exc:
             error_text = str(exc)
-            is_retryable = any(token in error_text for token in ["429", "RESOURCE_EXHAUSTED", "rate limit"])
+            is_retryable = _is_quota_or_rate_limit_error(error_text)
 
             if not is_retryable or attempt == max_retries:
                 raise
@@ -39,6 +50,40 @@ def _invoke_with_retries(model, prompt: str, max_retries: int = 3, base_wait_sec
                 f"Retrying in {sleep_for:.1f}s..."
             )
             time.sleep(sleep_for)
+
+
+@lru_cache(maxsize=1)
+def _get_retriever():
+    embedding_function = get_embedding_function()
+    db = Chroma(persist_directory=chroma_path, embedding_function=embedding_function)
+
+    with open("bm25_index.pkl", "rb") as f:
+        bm25_retriever = pickle.load(f)
+
+    vector_retriever = db.as_retriever(search_kwargs={"k": 10})
+    bm25_retriever.k = 10
+
+    ensemble_retriever = EnsembleRetriever(
+        retrievers=[bm25_retriever, vector_retriever],
+        weights=[0.5, 0.5]
+    )
+    compressor = get_reranker(top_n=5)
+
+    return ContextualCompressionRetriever(
+        base_compressor=compressor,
+        base_retriever=ensemble_retriever
+    )
+
+
+@lru_cache(maxsize=1)
+def _get_generation_model():
+    if _is_ci():
+        return ChatGoogleGenerativeAI(
+            model="gemini-2.0-flash",
+            temperature=0,
+            api_key=os.getenv("GEMINI_API_KEY")
+        )
+    return OllamaLLM(model="llama3.2")
 
 
 def load_prompt():
@@ -53,34 +98,24 @@ def main():
     query_rag(args.query_text)
 
 def query_rag(query_text: str):
+    global _CI_QUOTA_EXHAUSTED
+
     if not chroma_path:
         raise ValueError("CHROMA_PATH is not set. Add it to .env or export it in your shell.")
 
+    if _is_ci() and _CI_QUOTA_EXHAUSTED:
+        return (
+            "LLM generation unavailable: Gemini quota/rate limit exceeded. "
+            "Skipping remaining requests in this run."
+        )
+
     print("Starting query...")
 
-    embedding_function = get_embedding_function()
-    db = Chroma(persist_directory=chroma_path, embedding_function=embedding_function)
-
     try:
-        with open("bm25_index.pkl", "rb") as f:
-            bm25_retriever = pickle.load(f)
+        final_retriever = _get_retriever()
     except FileNotFoundError:
         print("BM25 index not found. Please run populate_db.py first.")
         return "BM25 index missing."
-
-    vector_retriever = db.as_retriever(search_kwargs={"k": 10})
-    bm25_retriever.k = 10
-
-    ensemble_retriever = EnsembleRetriever(
-        retrievers=[bm25_retriever, vector_retriever],
-        weights=[0.5, 0.5]
-    )
-    compressor = get_reranker(top_n=5)
-
-    final_retriever = ContextualCompressionRetriever(
-        base_compressor=compressor,
-        base_retriever=ensemble_retriever
-    )
 
     results = final_retriever.invoke(query_text)
 
@@ -106,24 +141,16 @@ def query_rag(query_text: str):
 
     print("\n Generating Response:\n")
 
-    if os.getenv("GITHUB_ACTIONS") == "true":
-        model = ChatGoogleGenerativeAI(
-            model="gemini-2.0-flash",
-            temperature=0,
-            api_key=os.getenv("GEMINI_API_KEY")
-        )
-    else:
-        model = OllamaLLM(model="llama3.2")
+    model = _get_generation_model()
     
     try:
         raw_response = _invoke_with_retries(model, prompt)
     except Exception as exc:
         error_text = str(exc)
-        is_quota_or_rate_limited = any(
-            token in error_text for token in ["429", "RESOURCE_EXHAUSTED", "rate limit"]
-        )
+        is_quota_or_rate_limited = _is_quota_or_rate_limit_error(error_text)
 
-        if os.getenv("GITHUB_ACTIONS") == "true" and is_quota_or_rate_limited:
+        if _is_ci() and is_quota_or_rate_limited:
+            _CI_QUOTA_EXHAUSTED = True
             print(f"Gemini request failed in CI: {exc}")
             if os.getenv("ENABLE_OLLAMA_FALLBACK", "false").lower() == "true":
                 print("Falling back to Ollama because ENABLE_OLLAMA_FALLBACK=true")

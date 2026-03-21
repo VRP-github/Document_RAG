@@ -36,6 +36,10 @@ def run_evaluations():
         expected_context = eval(row["contexts"]) 
         
         response = query_rag(question) 
+
+        if isinstance(response, str) and response.startswith("LLM generation unavailable"):
+            print(f"Evaluation aborted: {response}")
+            sys.exit(1)
         
         data["question"].append(question)
         data["answer"].append(response)
