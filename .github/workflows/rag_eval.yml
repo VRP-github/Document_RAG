@@ -9,8 +9,8 @@ jobs:
     runs-on: self-hosted
 
     env:
-      RUNNER_TOOL_CACHE: ${{ github.workspace }}/.toolcache
-      AGENT_TOOLSDIRECTORY: ${{ github.workspace }}/.toolcache
+      RUNNER_TOOL_CACHE: /tmp/hostedtoolcache
+      AGENT_TOOLSDIRECTORY: /tmp/hostedtoolcache
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
