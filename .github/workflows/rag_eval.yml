@@ -8,9 +8,11 @@ jobs:
   evaluate:
     runs-on: self-hosted
 
+    # --- THE FIX ---
     env:
+      # Redirects the Python installation to your Mac's safe temporary folder
       RUNNER_TOOL_CACHE: /tmp/hostedtoolcache
-
+    # ---------------
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
