@@ -1,9 +1,10 @@
 import argparse
+import time
 from langchain_chroma import Chroma
 from langchain_core.prompts import ChatPromptTemplate
 from dotenv import load_dotenv
 from langchain_ollama import OllamaLLM 
-from langchain_google_genai import ChatGoogleGenerativeAI # NEW: Imported Gemini
+from langchain_google_genai import ChatGoogleGenerativeAI, ChatGoogleGenerativeAIError
 import json
 from get_embedding_function import get_embedding_function
 import os
@@ -18,6 +19,26 @@ chroma_path = os.getenv("CHROMA_PATH")
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
+
+
+def _invoke_with_retries(model, prompt: str, max_retries: int = 3, base_wait_seconds: float = 5.0):
+    """Call an LLM with bounded retries for transient quota/rate-limit failures."""
+    for attempt in range(1, max_retries + 1):
+        try:
+            return model.invoke(prompt)
+        except Exception as exc:
+            error_text = str(exc)
+            is_retryable = any(token in error_text for token in ["429", "RESOURCE_EXHAUSTED", "rate limit"])
+
+            if not is_retryable or attempt == max_retries:
+                raise
+
+            sleep_for = base_wait_seconds * attempt
+            print(
+                f"LLM temporarily unavailable (attempt {attempt}/{max_retries}). "
+                f"Retrying in {sleep_for:.1f}s..."
+            )
+            time.sleep(sleep_for)
 
 
 def load_prompt():
@@ -94,7 +115,31 @@ def query_rag(query_text: str):
     else:
         model = OllamaLLM(model="llama3.2")
     
-    raw_response = model.invoke(prompt)
+    try:
+        raw_response = _invoke_with_retries(model, prompt)
+    except ChatGoogleGenerativeAIError as exc:
+        if os.getenv("GITHUB_ACTIONS") == "true":
+            print(f"Gemini request failed in CI: {exc}")
+            if os.getenv("ENABLE_OLLAMA_FALLBACK", "false").lower() == "true":
+                print("Falling back to Ollama because ENABLE_OLLAMA_FALLBACK=true")
+                fallback_model = OllamaLLM(model=os.getenv("OLLAMA_MODEL", "llama3.2"))
+                raw_response = _invoke_with_retries(fallback_model, prompt)
+            else:
+                return (
+                    "LLM generation unavailable: Gemini quota/rate limit exceeded. "
+                    "Set a valid GEMINI_API_KEY with quota or enable ENABLE_OLLAMA_FALLBACK=true."
+                )
+        else:
+            raise
+    except Exception as exc:
+        if os.getenv("GITHUB_ACTIONS") == "true" and any(
+            token in str(exc) for token in ["429", "RESOURCE_EXHAUSTED", "rate limit"]
+        ):
+            return (
+                "LLM generation unavailable: transient provider quota/rate-limit error. "
+                "Retry later or provide a key/model with available quota."
+            )
+        raise
     
 
     response_text = raw_response.content if hasattr(raw_response, 'content') else raw_response
