@@ -3,11 +3,11 @@ import sys
 import pandas as pd
 from datasets import Dataset
 from ragas import evaluate
-from ragas.metrics.collections import (
-    faithfulness,
-    answer_relevancy,
-    context_precision,
-    context_recall,
+from ragas.metrics import (
+    Faithfulness,
+    AnswerRelevancy,
+    ContextPrecision,
+    ContextRecall,
 )
 from ragas.llms import LangchainLLMWrapper
 from ragas.embeddings import LangchainEmbeddingsWrapper
@@ -61,7 +61,8 @@ def run_evaluations():
 
     result = evaluate(
         dataset=dataset,
-        metrics=[faithfulness, answer_relevancy, context_precision, context_recall],
+        metrics=[Faithfulness(), AnswerRelevancy(), ContextPrecision(), ContextRecall()],
+        llm=evaluator_llm,
         llm=evaluator_llm,
         embeddings=evaluator_embeddings,
         run_config=safe_config
