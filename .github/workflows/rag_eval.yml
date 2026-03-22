@@ -6,7 +6,10 @@ on:
 
 jobs:
   evaluate:
-    runs-on: ubuntu-latest 
+    runs-on: self-hosted
+
+    env:
+      RUNNER_TOOL_CACHE: /tmp/hostedtoolcache
 
     steps:
     - name: Checkout code
@@ -22,16 +25,8 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
-
-    # - name: Build Vector Database
-    #   run: python populate_db.py
-
     - name: Run Ragas Evaluation
       env:
-        # This securely injects the secret you saved in Step 2 into the script
-        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        
-        # Ensure your script knows where to look for the DB
-        CHROMA_PATH: "chroma" 
+        CHROMA_PATH: "chroma"
       run: |
         python evaluate_rag.py

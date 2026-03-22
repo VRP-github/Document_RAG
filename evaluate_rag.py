@@ -3,11 +3,15 @@ import sys
 import pandas as pd
 from datasets import Dataset
 from ragas import evaluate
-from ragas.metrics import faithfulness, answer_relevancy, context_precision, context_recall
+from ragas.metrics import (
+    Faithfulness,
+    AnswerRelevancy,
+    ContextPrecision,
+    ContextRecall,
+)
 from ragas.llms import LangchainLLMWrapper
 from ragas.embeddings import LangchainEmbeddingsWrapper
 from langchain_ollama import ChatOllama
-from langchain_google_genai import ChatGoogleGenerativeAI
 from get_embedding_function import get_embedding_function
 from query_data import query_rag
 from ragas.run_config import RunConfig
@@ -17,6 +21,9 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 def run_evaluations():
     df = pd.read_csv("candidate_dataset.csv")
+    
+    # Optional: If running all 64 takes too long for a CI test, you can uncomment the next line to just test 5 random questions.
+    # df = df.sample(n=5, random_state=42) 
     
     data = {
         "question": [],
@@ -39,18 +46,11 @@ def run_evaluations():
 
     dataset = Dataset.from_dict(data)
 
-    if os.getenv("GITHUB_ACTIONS") == "true":
-        raw_llm = ChatGoogleGenerativeAI(
-            model="gemini-2.5-flash", 
-            temperature=0,
-            api_key=os.getenv("GEMINI_API_KEY")
-        )
-    else:
-        raw_llm = ChatOllama(
-            model="llama3.1", 
-            temperature=0, 
-            format="json"
-        )
+    raw_llm = ChatOllama(
+        model="llama3.1", 
+        temperature=0, 
+        format="json"
+    )
 
     raw_embeddings = get_embedding_function()
     
@@ -61,7 +61,7 @@ def run_evaluations():
 
     result = evaluate(
         dataset=dataset,
-        metrics=[faithfulness, answer_relevancy, context_precision, context_recall],
+        metrics=[Faithfulness(), AnswerRelevancy(), ContextPrecision(), ContextRecall()],
         llm=evaluator_llm,
         embeddings=evaluator_embeddings,
         run_config=safe_config
@@ -91,7 +91,7 @@ def run_evaluations():
         print("\nQuality Gate Failed! Halting pipeline.")
         sys.exit(1) 
     else:
-        print("\nQuality Gate Passed! Safe to merge.")
+        print("\nQuality Gate Passed! Safe to merge!")
         sys.exit(0) 
 
 if __name__ == "__main__":

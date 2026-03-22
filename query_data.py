@@ -18,7 +18,6 @@ chroma_path = os.getenv("CHROMA_PATH")
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
 
-
 def load_prompt():
     with open("prompts.json","r") as f:
         prompts = json.load(f)
@@ -83,6 +82,7 @@ def query_rag(query_text: str):
     prompt = prompt_template.format(context=context_text, question=query_text, allowed_ids=allowed_sources_string)
 
     print("\n Generating Response:\n")
+
     model = OllamaLLM(model="llama3.2")
     response_text = model.invoke(prompt)
 
