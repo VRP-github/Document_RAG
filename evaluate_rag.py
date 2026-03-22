@@ -1,6 +1,5 @@
 import os
 import sys
-import random
 import pandas as pd
 from datasets import Dataset
 from ragas import evaluate
@@ -13,7 +12,6 @@ from ragas.metrics.collections import (
 from ragas.llms import LangchainLLMWrapper
 from ragas.embeddings import LangchainEmbeddingsWrapper
 from langchain_ollama import ChatOllama
-from langchain_google_genai import ChatGoogleGenerativeAI
 from get_embedding_function import get_embedding_function
 from query_data import query_rag
 from ragas.run_config import RunConfig
@@ -21,29 +19,11 @@ import warnings
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
-
-def _is_ci() -> bool:
-    return os.getenv("GITHUB_ACTIONS") == "true"
-
-
-def _apply_smoke_sampling(df: pd.DataFrame) -> tuple[pd.DataFrame, bool]:
-    """Use a small random subset in CI to keep PR checks fast and inexpensive."""
-    if not _is_ci():
-        return df, False
-
-    min_n = int(os.getenv("SMOKE_TEST_MIN_QUESTIONS", "3"))
-    max_n = int(os.getenv("SMOKE_TEST_MAX_QUESTIONS", "5"))
-    if min_n > max_n:
-        min_n, max_n = max_n, min_n
-
-    sample_n = min(len(df), random.randint(min_n, max_n))
-    sampled_df = df.sample(n=sample_n)
-    print(f"Smoke test mode enabled (CI): evaluating {sample_n}/{len(df)} questions.")
-    return sampled_df, True
-
 def run_evaluations():
     df = pd.read_csv("candidate_dataset.csv")
-    df, smoke_test_mode = _apply_smoke_sampling(df)
+    
+    # Optional: If running all 64 takes too long for a CI test, you can uncomment the next line to just test 5 random questions.
+    # df = df.sample(n=5, random_state=42) 
     
     data = {
         "question": [],
@@ -58,10 +38,6 @@ def run_evaluations():
         expected_context = eval(row["contexts"]) 
         
         response = query_rag(question) 
-
-        if isinstance(response, str) and response.startswith("LLM generation unavailable"):
-            print(f"Evaluation aborted: {response}")
-            sys.exit(1)
         
         data["question"].append(question)
         data["answer"].append(response)
@@ -70,18 +46,11 @@ def run_evaluations():
 
     dataset = Dataset.from_dict(data)
 
-    if os.getenv("GITHUB_ACTIONS") == "true":
-        raw_llm = ChatGoogleGenerativeAI(
-            model="gemini-2.0-flash", 
-            temperature=0,
-            api_key=os.getenv("GEMINI_API_KEY")
-        )
-    else:
-        raw_llm = ChatOllama(
-            model="llama3.1", 
-            temperature=0, 
-            format="json"
-        )
+    raw_llm = ChatOllama(
+        model="llama3.1", 
+        temperature=0, 
+        format="json"
+    )
 
     raw_embeddings = get_embedding_function()
     
@@ -107,10 +76,6 @@ def run_evaluations():
         "faithfulness": 0.40,
         "answer_relevancy": 0.30
     }
-
-    if smoke_test_mode:
-        print("\nSmoke test completed successfully. Skipping strict quality gate in CI mode.")
-        sys.exit(0)
 
     print("\n--- Running Quality Gate ---")
     passed = True

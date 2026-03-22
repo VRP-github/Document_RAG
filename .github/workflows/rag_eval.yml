@@ -25,39 +25,8 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
-    - name: Preflight secrets and paths
-      env:
-        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        CHROMA_PATH: "chroma"
-      run: |
-        python - <<'PY'
-        import os
-        import pathlib
-        import sys
-
-        gemini = os.getenv("GEMINI_API_KEY", "")
-        chroma = os.getenv("CHROMA_PATH", "chroma")
-
-        if not gemini:
-            print("::error::Missing required secret GEMINI_API_KEY.")
-            sys.exit(1)
-
-        if len(gemini.strip()) < 20:
-            print("::warning::GEMINI_API_KEY looks unusually short; verify the secret value.")
-
-        if not pathlib.Path(chroma).exists():
-            print(f"::error::CHROMA_PATH '{chroma}' does not exist in the repository.")
-            sys.exit(1)
-
-        print("Preflight checks passed.")
-        PY
-
     - name: Run Ragas Evaluation
       env:
-        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        HF_TOKEN: ${{ secrets.HF_TOKEN }}
         CHROMA_PATH: "chroma"
-        SMOKE_TEST_MIN_QUESTIONS: "3"
-        SMOKE_TEST_MAX_QUESTIONS: "5"
       run: |
         python evaluate_rag.py
