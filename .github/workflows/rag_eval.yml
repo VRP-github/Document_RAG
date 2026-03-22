@@ -6,7 +6,11 @@ on:
 
 jobs:
   evaluate:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
+
+    env:
+      RUNNER_TOOL_CACHE: /tmp/hostedtoolcache
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -47,10 +51,6 @@ jobs:
 
         print("Preflight checks passed.")
         PY
-
-
-    # - name: Build Vector Database
-    #   run: python populate_db.py
 
     - name: Run Ragas Evaluation
       env:
