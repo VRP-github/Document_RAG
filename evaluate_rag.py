@@ -63,7 +63,6 @@ def run_evaluations():
         dataset=dataset,
         metrics=[Faithfulness(), AnswerRelevancy(), ContextPrecision(), ContextRecall()],
         llm=evaluator_llm,
-        llm=evaluator_llm,
         embeddings=evaluator_embeddings,
         run_config=safe_config
     )
