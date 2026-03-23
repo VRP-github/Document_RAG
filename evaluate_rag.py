@@ -1,6 +1,7 @@
 import os
 import sys
 import pandas as pd
+import math
 from datasets import Dataset
 from ragas import evaluate
 from ragas.metrics import (
@@ -20,7 +21,7 @@ import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 def run_evaluations():
-    df = pd.read_csv("candidate_dataset.csv")
+    df = pd.read_csv("test.csv")
     
     # Optional: If running all 64 takes too long for a CI test, you can uncomment the next line to just test 5 random questions.
     # df = df.sample(n=5, random_state=42) 
@@ -78,9 +79,29 @@ def run_evaluations():
     }
 
     print("\n--- Running Quality Gate ---")
+
+    def to_scalar_score(value):
+        # RAGAS can return per-sample lists; gate checks require a single scalar.
+        if isinstance(value, list):
+            numeric = pd.to_numeric(pd.Series(value), errors="coerce").dropna()
+            if numeric.empty:
+                return math.nan
+            return float(numeric.mean())
+
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return math.nan
+
     passed = True
     for metric, min_score in THRESHOLDS.items():
-        actual_score = result[metric] 
+        actual_score = to_scalar_score(result[metric])
+
+        if pd.isna(actual_score):
+            print(f"FAILED: {metric} returned a non-numeric value: {result[metric]}")
+            passed = False
+            continue
+
         if actual_score < min_score:
             print(f"FAILED: {metric} scored {actual_score:.4f} (Threshold: {min_score})")
             passed = False
