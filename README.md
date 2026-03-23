@@ -84,7 +84,7 @@ PDFs (data/)
 │      Citation Validator             │  ──► ✅ Final Response
 └─────────────────────────────────────┘         (or ❌ blocked)
 
-Test Dataset (test.csv)
+Test Dataset (candidate_dataset.csv)
     │
     ▼
 ┌─────────────────────────────────────┐
